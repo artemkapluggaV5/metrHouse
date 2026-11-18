@@ -20,10 +20,9 @@ const photoURL=id=>'index.php?api=photo&id='+encodeURIComponent(id);
 const contactRules=JSON.parse($('#contact-rules').textContent);
 for(const rule of Object.values(contactRules)) rule.regex=new RegExp('^(?:'+rule.pattern+')$','u');
 
-function fieldMessage(el){
+function fieldMessage(el,checkRequired){
  const value=el.name==='password'?el.value:el.value.trim();
- if(el.required && !value) return 'Заполните это поле.';
- if(!value) return '';
+ if(!value) return checkRequired && el.required?'Заполните это поле.':'';
  const key=el.name;
  const registration=!!el.form.elements.full_name;
  const contact=contactRules[key];
@@ -50,7 +49,8 @@ function setFieldError(el,message){
  if(output) output.textContent=message;
 }
 function prepareChecks(form){
- const validate=el=>setFieldError(el,fieldMessage(el));
+ let submitAttempted=false;
+ const validate=el=>setFieldError(el,fieldMessage(el,submitAttempted));
  const isControl=el=>el.matches('input:not([type=checkbox]),textarea,select');
  for(const el of form.elements)if(isControl(el))el.onblur=()=>validate(el);
  form.oninput=e=>{
@@ -72,6 +72,7 @@ function prepareChecks(form){
    name.onpaste=e=>block(e,e.clipboardData?.getData('text/plain'));
  }
  return ()=>{
+   submitAttempted=true;
    for(const el of form.elements)if(isControl(el))validate(el);
    return form.reportValidity();
  };
