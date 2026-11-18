@@ -13,10 +13,69 @@ const opts=(values,current)=>Object.entries(values).map(([k,v])=>`<option value=
 const field=(name,label,html)=>`<label class="field" data-field="${name}"><span>${label}</span>${html}<small class="fielderr"></small></label>`;
 const input=(name,label,value='',attrs='')=>field(name,label,`<input name="${name}" value="${esc(value)}" ${attrs}>`);
 const sel=(name,label,values,value)=>field(name,label,`<select name="${name}">${opts(values,value)}</select>`);
-const areaField=(name,label,value='',max=10000)=>field(name,label,`<textarea name="${name}" maxlength="${max}">${esc(value)}</textarea>`);
+const areaField=(name,label,value='',max=10000,required=false)=>field(name,label,`<textarea ${required?'required':''} name="${name}" maxlength="${max}">${esc(value)}</textarea>`);
 const formError='<div class="err" role="alert"></div>';
 const button=(title,kind='primary')=>`<button class="btn ${kind}" type="submit">${title}</button>`;
 const photoURL=id=>'index.php?api=photo&id='+encodeURIComponent(id);
+const contactRules=JSON.parse($('#contact-rules').textContent);
+for(const rule of Object.values(contactRules)) rule.regex=new RegExp('^(?:'+rule.pattern+')$','u');
+
+function fieldMessage(el){
+ const value=el.name==='password'?el.value:el.value.trim();
+ if(el.required && !value) return 'Заполните это поле.';
+ if(!value) return '';
+ const key=el.name;
+ const registration=!!el.form.elements.full_name;
+ const contact=contactRules[key];
+ if(contact && (key!=='email'||registration) && !contact.regex.test(value)) return contact.message;
+ if(key==='email' && el.validity.typeMismatch) return contactRules.email.message;
+ if(key==='password'){
+   if(registration && [...el.value].length<8) return 'Для регистрации нужно не менее 8 символов.';
+   if(new TextEncoder().encode(el.value).length>72) return 'Пароль должен помещаться в 72 байта.';
+ }
+ if(['price','area','min','max'].includes(key)){
+   const number=value.replace(',','.');
+   const pattern=key==='area'?/^\d{1,6}(?:\.\d{1,2})?$/:/^\d{1,13}(?:\.\d{1,2})?$/;
+   if(!pattern.test(number)) return 'Введите число (до двух знаков после запятой).';
+   if((key==='price'||key==='area') && Number(number)<=0) return 'Значение должно быть больше нуля.';
+   if(key==='max' && el.form.elements.min.value.trim() && Number(number)<Number(el.form.elements.min.value.trim().replace(',','.'))) return 'Верхняя цена меньше нижней.';
+ }
+ return '';
+}
+function setFieldError(el,message){
+ el.setCustomValidity(message);
+ el.classList.toggle('invalid',!!message);
+ el.setAttribute('aria-invalid',String(!!message));
+ const output=el.closest('[data-field]')?.querySelector('.fielderr');
+ if(output) output.textContent=message;
+}
+function prepareChecks(form){
+ const validate=el=>setFieldError(el,fieldMessage(el));
+ const isControl=el=>el.matches('input:not([type=checkbox]),textarea,select');
+ for(const el of form.elements)if(isControl(el))el.onblur=()=>validate(el);
+ form.oninput=e=>{
+   const el=e.target;if(!isControl(el))return;
+   if(el.validity.customError||el.classList.contains('invalid')||el.closest('[data-field]')?.querySelector('.fielderr')?.textContent)validate(el);
+   if(el.name==='min' && form.elements.max.validity.customError)validate(form.elements.max);
+ };
+ const name=form.elements.full_name;
+ if(name){
+   const allowed=/^[\p{L}\p{M} '\u2019\u2010\u2011-]*$/u;
+   const block=(event,text)=>{
+     if(text && !allowed.test(text)){
+       event.preventDefault();
+       const hint=name.closest('[data-field]').querySelector('.fielderr');
+       hint.textContent=contactRules.full_name.message;
+     }
+   };
+   name.onbeforeinput=e=>{if(!e.isComposing)block(e,e.data)};
+   name.onpaste=e=>block(e,e.clipboardData?.getData('text/plain'));
+ }
+ return ()=>{
+   for(const el of form.elements)if(isControl(el))validate(el);
+   return form.reportValidity();
+ };
+}
 let session, routeVersion=0, lastCatalog='#catalog', deskTab='', timer, authNext='';
 async function api(op,params={},data=null){
  const url=new URL('index.php',location.href);url.searchParams.set('api',op);
@@ -28,7 +87,9 @@ async function api(op,params={},data=null){
 }
 function notify(s){const el=$('.toast');el.textContent=s;el.hidden=false;clearTimeout(timer);timer=setTimeout(()=>el.hidden=true,3600)}
 function bindForm(form,action){
- form.onsubmit=async ev=>{ev.preventDefault();if(form.dataset.busy)return;
+ const valid=prepareChecks(form);
+ form.noValidate=true;
+ form.onsubmit=async ev=>{ev.preventDefault();if(form.dataset.busy||!valid())return;
  form.dataset.busy='1';const submit=ev.submitter||form.querySelector('button[type=submit]');if(submit)submit.disabled=true;
  form.querySelectorAll('.fielderr,.err').forEach(x=>x.textContent='');form.querySelectorAll('.invalid').forEach(x=>x.classList.remove('invalid'));
  try{await action(new FormData(form))}catch(e){const box=[...form.querySelectorAll('[data-field]')].find(x=>x.dataset.field===e.field);
@@ -46,7 +107,7 @@ function account(){
 }
 function auth(register=false,next='#desk'){
  authNext=next;
- dialog(register?'Регистрация клиента':'Вход в кабинет',`<form class="stack" id="authform">${register?input('full_name','Имя и фамилия','','required maxlength="150" autocomplete="name"'):''}${input('email','Электронная почта','','type="email" required autocomplete="username"')}${input('password','Пароль','','type="password" required autocomplete="'+(register?'new-password':'current-password')+'" '+(register?'minlength="8"':''))}${formError}${button(register?'Создать аккаунт':'Войти')}<button type="button" id="switch" class="linkbtn">${register?'Уже есть аккаунт? Войти':'Зарегистрироваться как клиент'}</button></form>`);
+ dialog(register?'Регистрация клиента':'Вход в кабинет',`<form class="stack" id="authform">${register?input('full_name','Имя и фамилия','','required maxlength="150" autocomplete="name" placeholder="Анна Петрова"'):''}${input('email','Электронная почта','','type="email" required maxlength="'+(register?254:255)+'" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="anna@example.ru"')}${input('password','Пароль','','type="password" required autocomplete="'+(register?'new-password':'current-password')+'" '+(register?'minlength="8"':''))}${formError}${button(register?'Создать аккаунт':'Войти')}<button type="button" id="switch" class="linkbtn">${register?'Уже есть аккаунт? Войти':'Зарегистрироваться как клиент'}</button></form>`);
  $('#switch').onclick=()=>auth(!register,next);
  bindForm($('#authform'),async data=>{session=await api(register?'register':'login',{},data);account();modal.close();deskTab='';go(next)});
 }
@@ -72,7 +133,8 @@ async function catalog(p,epoch){
    tab.classList.toggle('current',selected);
    tab.setAttribute('aria-pressed',String(selected));
  }
- const search=(extra={})=>{const d={...Object.fromEntries(new FormData(f)),deal_type:deal,sort:$('.sort').value,...extra}; const q=new URLSearchParams(Object.entries(d).filter(([k,v])=>v&&!(k==='sort'&&v==='new'))).toString();go('#catalog'+(q?'?'+q:''))};
+ const valid=prepareChecks(f);f.noValidate=true;
+ const search=(extra={})=>{if(!valid())return;const d={...Object.fromEntries(new FormData(f)),deal_type:deal,sort:$('.sort').value,...extra}; const q=new URLSearchParams(Object.entries(d).filter(([k,v])=>v&&!(k==='sort'&&v==='new'))).toString();go('#catalog'+(q?'?'+q:''))};
  f.onsubmit=e=>{e.preventDefault();search()};f.querySelectorAll('[data-deal]').forEach(b=>b.onclick=()=>search({deal_type:b.dataset.deal}));$('.sort').onchange=()=>search();
  let list;
  try{list=await api('catalog',params)}catch(e){if(epoch!==routeVersion)return;$('.err',f).textContent=e.message;$('#results').innerHTML='';$('#total').textContent='—';return;}
@@ -84,7 +146,7 @@ async function catalog(p,epoch){
 }
 async function application(id){
  const task=await api('challenge');
- dialog('Заявка на просмотр',`<form id="application" class="stack">${input('phone','Телефон','','type="tel" autocomplete="tel" required placeholder="+7 (___) ___-__-__"')}${areaField('comment','Комментарий (по желанию)','',2000)}<span class="verify">Проверка · <b id="sum">${esc(task.question)}</b> = ?</span>${input('answer','Ответ','','inputmode="numeric" required maxlength="5"')}${formError}${button('Отправить заявку')}</form>`);
+ dialog('Заявка на просмотр',`<form id="application" class="stack">${input('phone','Телефон','','type="tel" autocomplete="tel" maxlength="30" required placeholder="+7 (___) ___-__-__"')}${areaField('comment','Комментарий (по желанию)','',2000)}<span class="verify">Проверка · <b id="sum">${esc(task.question)}</b> = ?</span>${input('answer','Ответ','','inputmode="numeric" pattern="[0-9]+" required maxlength="5"')}${formError}${button('Отправить заявку')}</form>`);
  let token=task.token;bindForm($('#application'),async data=>{data.set('token',token);data.set('id',id);
  try{await api('apply',{},data)}catch(e){const refreshed=await api('challenge');token=refreshed.token;$('#sum').textContent=refreshed.question;$('#application [name=answer]').value='';throw e}
  modal.close();notify('Заявка отправлена агенту.');deskTab='';go('#desk');});

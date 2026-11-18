@@ -7,7 +7,7 @@ function challenge(): array {
 function applyForObject(): array {
     $u=role('client');$id=integer($_POST,'id');
     $phone=val($_POST,'phone',30);$comment=val($_POST,'comment',2000,false);
-    if(!preg_match('/^\+?[\d() -]+$/D',$phone)||!preg_match('/^\d{10,15}$/D',preg_replace('/\D/','',$phone))) fail('Укажите телефон с кодом города или страны.','phone');
+    checkContact('phone',$phone);
     $token=val($_POST,'token',32); $task=$_SESSION['tasks'][$token]??null;unset($_SESSION['tasks'][$token]);
     if(!$task||$task[1]<time()||strval($task[0])!==val($_POST,'answer',5,false)) fail('Проверочный ответ неверен или задание истекло. Решите новый пример.','answer');
     return tx(function() use ($u,$id,$phone,$comment){

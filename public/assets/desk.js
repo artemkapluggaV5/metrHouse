@@ -1,6 +1,6 @@
 'use strict';
 function decision(o,publish){
- dialog(publish?'Опубликовать объект?':'Отклонить объявление',`<form id="actionform" class="stack"><div><strong>${esc(o.title)}</strong><div class="muted">Версия ${o.version}</div></div>${publish?'':areaField('note','Что нужно исправить?','',1200)}${formError}${button(publish?'Опубликовать':'Вернуть агенту')}</form>`);
+ dialog(publish?'Опубликовать объект?':'Отклонить объявление',`<form id="actionform" class="stack"><div><strong>${esc(o.title)}</strong><div class="muted">Версия ${o.version}</div></div>${publish?'':areaField('note','Что нужно исправить?','',1200,true)}${formError}${button(publish?'Опубликовать':'Вернуть агенту')}</form>`);
  bindForm($('#actionform'),async data=>{data.set('id',o.id);data.set('version',o.version);data.set('decision',publish?'publish':'reject');await api('moderate',{},data);modal.close();notify(publish?'Объект опубликован.':'Объект возвращён агенту.');go('#desk')});
 }
 function retire(o,del){
@@ -15,10 +15,13 @@ async function editor(id,epoch){
  <div class="wide">${input('title','Название',o.title,'required maxlength="255"')}</div>${sel('property_type','Тип недвижимости',types,o.property_type)}${sel('deal_type','Вид сделки',deals,o.deal_type)}
  ${input('price','Цена, ₽ (для аренды — в месяц)',o.price,'required inputmode="decimal"')}${input('area','Площадь, м²',o.area,'required inputmode="decimal"')}
  ${input('rooms','Количество комнат (0 — студия)',o.rooms,'type="number" min="0" max="999"')}${input('address','Адрес',o.address,'required maxlength="255"')}
- <div class="wide">${areaField('description','Описание',o.description)}</div><div class="wide">${field('photos','Фотографии',`<input name="photos[]" type="file" multiple accept="image/jpeg,image/png"><small class="muted">До 8 снимков JPEG или PNG, каждый до 5 МБ и 16 Мп.</small>`)}</div>
+ <div class="wide">${areaField('description','Описание',o.description,10000,true)}</div><div class="wide">${field('photos','Фотографии',`<input name="photos[]" type="file" multiple accept="image/jpeg,image/png"><small class="muted">До 8 снимков JPEG или PNG, каждый до 5 МБ и 16 Мп.</small>`)}</div>
  ${o.photos.length?`<div class="wide thumbs">${o.photos.map(p=>`<label class="photo-check"><img src="${photoURL(p)}" alt="Снимок объекта"><input type="checkbox" name="remove[]" value="${p}"> Удалить</label>`).join('')}</div>`:''}
  <div class="wide">${formError}<div class="actions">${button('Отправить на проверку')}<a class="btn" href="#desk">Отмена</a></div></div></form>`;
- const form=$('#editor');bindForm(form,async data=>{if(id){data.set('id',id);data.set('version',o.version)}await api('save',{},data);deskTab='objects';notify('Карточка направлена на проверку.');go('#desk')});
+ const form=$('#editor');
+ const syncRooms=()=>{form.elements.rooms.required=form.elements.property_type.value==='flat';form.elements.rooms.setCustomValidity('')};
+ syncRooms();form.elements.property_type.onchange=syncRooms;
+ bindForm(form,async data=>{if(id){data.set('id',id);data.set('version',o.version)}await api('save',{},data);deskTab='objects';notify('Карточка направлена на проверку.');go('#desk')});
 }
 async function desk(epoch){
  const d=await api('dashboard');if(epoch!==routeVersion)return;
