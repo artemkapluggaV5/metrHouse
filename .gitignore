@@ -1,0 +1,21 @@
+/storage/
+/config/local.php
+.env
+.env.*
+!.env.example
+
+# Track only the Apache components used by the Windows launcher.
+/runtime/Apache24/*
+!/runtime/Apache24/*.txt
+!/runtime/Apache24/bin/
+/runtime/Apache24/bin/*
+!/runtime/Apache24/bin/*.dll
+!/runtime/Apache24/bin/httpd.exe
+!/runtime/Apache24/modules/
+/runtime/Apache24/modules/*
+!/runtime/Apache24/modules/mod_authz_core.so
+!/runtime/Apache24/modules/mod_dir.so
+!/runtime/Apache24/modules/mod_mime.so
+!/runtime/Apache24/conf/
+/runtime/Apache24/conf/*
+!/runtime/Apache24/conf/mime.types

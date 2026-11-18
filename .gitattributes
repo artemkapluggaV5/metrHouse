@@ -1,0 +1,4 @@
+* text=auto
+/runtime/** -text
+*.jpg -text
+*.cmd text eol=crlf
