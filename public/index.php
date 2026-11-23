@@ -12,7 +12,7 @@ session_set_cookie_params(['httponly'=>true,'samesite'=>'Lax','secure'=>(($_SERV
 header('Cache-Control: no-store');header('Content-Type: application/json; charset=utf-8');
 $_SESSION['csrf']??=bin2hex(random_bytes(32));
 try {
-    $reads=['session','catalog','detail','photo','dashboard','challenge'];
+    $reads=['session','catalog','detail','photo','dashboard','challenge','registration_challenge'];
     if(!in_array($op,$reads,true)){
         if($_SERVER['REQUEST_METHOD']!=='POST') fail('Требуется отправка формы.','',405);
         if(!hash_equals($_SESSION['csrf'],$_SERVER['HTTP_X_CSRF_TOKEN']??'')) fail('Сеанс изменился. Обновите страницу.','',403);
@@ -21,7 +21,7 @@ try {
         'session'=>['user'=>user(),'csrf'=>$_SESSION['csrf']], 'catalog'=>catalog(), 'detail'=>detail(), 'photo'=>photo(),
         'login'=>authenticate(false),'register'=>authenticate(true),'logout'=>(function(){$_SESSION=[];session_destroy();return [];})(),
         'dashboard'=>dashboard(),'save'=>saveObject(),'archive'=>retireObject(false),'delete'=>retireObject(true),
-        'moderate'=>moderate(),'challenge'=>challenge(),'apply'=>applyForObject(),'request_status'=>moveRequest(),
+        'moderate'=>moderate(),'challenge'=>challenge(),'registration_challenge'=>issueChallenge('registration_tasks'),'apply'=>applyForObject(),'request_status'=>moveRequest(),
         'user'=>adminUser(),'transfer'=>transfer(),'setting'=>adminSetting(),'status'=>adminStatus(),
         default=>throw new FormError('Страница не найдена.','',404)
     };

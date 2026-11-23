@@ -1,15 +1,12 @@
 <?php
 function challenge(): array {
-    role('client'); $a=random_int(2,15);$b=random_int(1,12);$token=bin2hex(random_bytes(12));
-    $_SESSION['tasks']=array_slice(array_filter($_SESSION['tasks']??[],fn($v)=>$v[1]>=time()),-7,null,true);
-    $_SESSION['tasks'][$token]=[$a+$b,time()+300];return ['token'=>$token,'question'=>"$a + $b"];
+    role('client');return issueChallenge('tasks');
 }
 function applyForObject(): array {
     $u=role('client');$id=integer($_POST,'id');
     $phone=val($_POST,'phone',30);$comment=val($_POST,'comment',2000,false);
     checkContact('phone',$phone);
-    $token=val($_POST,'token',32); $task=$_SESSION['tasks'][$token]??null;unset($_SESSION['tasks'][$token]);
-    if(!$task||$task[1]<time()||strval($task[0])!==val($_POST,'answer',5,false)) fail('Проверочный ответ неверен или задание истекло. Решите новый пример.','answer');
+    verifyChallenge('tasks');
     return tx(function() use ($u,$id,$phone,$comment){
         one('SELECT id FROM users WHERE id=? FOR UPDATE',[$u['id']]);
         $o=prop($id,true);if($o['status_id']!=2) fail('Объявление снято с публикации.');

@@ -10,6 +10,7 @@ function authenticate(bool $register): array {
         $name=val($_POST,'full_name',150);
         checkContact('full_name',$name);
         $name=preg_replace('/ +/u',' ',$name);
+        verifyChallenge('registration_tasks');
         try {query('INSERT INTO users(full_name,email,password_hash) VALUES(?,?,?)',[$name,$email,password_hash($pass,PASSWORD_DEFAULT)]);}
         catch(PDOException $e){if(($e->errorInfo[1]??0)==1062) fail('Этот адрес уже зарегистрирован.','email');throw $e;}
         $id=db()->lastInsertId();

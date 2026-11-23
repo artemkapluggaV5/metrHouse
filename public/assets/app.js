@@ -108,9 +108,29 @@ function account(){
 }
 function auth(register=false,next='#desk'){
  authNext=next;
- dialog(register?'Регистрация клиента':'Вход в кабинет',`<form class="stack" id="authform">${register?input('full_name','Имя и фамилия','','required maxlength="150" autocomplete="name" placeholder="Анна Петрова"'):''}${input('email','Электронная почта','','type="email" required maxlength="'+(register?254:255)+'" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="anna@example.ru"')}${input('password','Пароль','','type="password" required autocomplete="'+(register?'new-password':'current-password')+'" '+(register?'minlength="8"':''))}${formError}${button(register?'Создать аккаунт':'Войти')}<button type="button" id="switch" class="linkbtn">${register?'Уже есть аккаунт? Войти':'Зарегистрироваться как клиент'}</button></form>`);
+ dialog(register?'Регистрация клиента':'Вход в кабинет',`<form class="stack" id="authform">${register?input('full_name','Имя и фамилия','','required maxlength="150" autocomplete="name" placeholder="Анна Петрова"'):''}${input('email','Электронная почта','','type="email" required maxlength="'+(register?254:255)+'" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="anna@example.ru"')}${input('password','Пароль','','type="password" required autocomplete="'+(register?'new-password':'current-password')+'" '+(register?'minlength="8"':''))}${register?'<div class="verify">Проверка · <b data-question>Загрузка…</b> <button type="button" class="linkbtn" data-refresh>Новый пример</button></div>'+input('answer','Ответ на пример','','required inputmode="numeric" pattern="[0-9]+" maxlength="5" autocomplete="off"'):''}${formError}${button(register?'Создать аккаунт':'Войти')}<button type="button" id="switch" class="linkbtn">${register?'Уже есть аккаунт? Войти':'Зарегистрироваться как клиент'}</button></form>`);
  $('#switch').onclick=()=>auth(!register,next);
- bindForm($('#authform'),async data=>{session=await api(register?'register':'login',{},data);account();modal.close();deskTab='';go(next)});
+ const form=$('#authform');
+ let token='';
+ async function refresh(){
+   const question=$('[data-question]',form),refreshButton=$('[data-refresh]',form);
+   token='';refreshButton.disabled=true;form.elements.answer.value='';
+   try{
+     const task=await api('registration_challenge');
+     token=task.token;question.textContent=task.question+' = ?';
+   }catch(e){question.textContent='Нажмите «Новый пример» для повторной загрузки.'}
+   finally{refreshButton.disabled=false}
+ }
+ if(register){$('[data-refresh]',form).onclick=refresh;refresh()}
+ bindForm(form,async data=>{
+   if(register){
+     if(!token)throw new Error('Дождитесь загрузки примера или нажмите «Новый пример».');
+     data.set('token',token);
+   }
+   try{session=await api(register?'register':'login',{},data)}
+   catch(e){if(register)await refresh();throw e}
+   account();modal.close();deskTab='';go(next);
+ });
 }
 function go(hash){if(location.hash===hash)route();else location.hash=hash;}
 const empty=(title,sub='')=>`<div class="empty"><h3>${esc(title)}</h3>${sub}</div>`;

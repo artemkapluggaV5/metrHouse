@@ -58,7 +58,7 @@ if(!(IsOurs $dbPid $mysqld)){
  for($i=0;$i -lt 100 -and !(PortBusy $dbPort);$i++){Start-Sleep -Milliseconds 400}
  if(!(PortBusy $dbPort)){throw "MySQL failed to start. See $state/mysql.log"}
 }
-if(Test-Path $bootstrap){Remove-Item -LiteralPath $bootstrap}
+
 $ini=@"
 extension_dir="$(UnixPath "$php/ext")"
 extension=pdo_mysql
@@ -78,6 +78,7 @@ expose_php=Off
 "@
 SaveText "$state/php.ini" $ini
 Checked "$php/php.exe" @('-c',"$state/php.ini","$project/bin/install.php")
+if(Test-Path $bootstrap){Remove-Item -LiteralPath $bootstrap}
 if(!(IsOurs $webPid $httpd)){
  $cfg=@"
 ServerRoot "$(UnixPath $apache)"

@@ -53,3 +53,13 @@ function version(array $o): void {if(integer($_POST,'version')!=$o['version']) f
 function unlinkPhoto(string $name): void {
     $path=PHOTOS.basename($name); if(is_file($path) && !unlink($path)) error_log('Photo cleanup failed: '.basename($name));
 }
+
+function issueChallenge(string $bucket): array {
+    $a=random_int(2,15);$b=random_int(1,12);$token=bin2hex(random_bytes(12));
+    $_SESSION[$bucket]=array_slice(array_filter($_SESSION[$bucket]??[],fn($v)=>$v[1]>=time()),-7,null,true);
+    $_SESSION[$bucket][$token]=[$a+$b,time()+300];return ['token'=>$token,'question'=>"$a + $b"];
+}
+function verifyChallenge(string $bucket): void {
+    $token=val($_POST,'token',32,false); $task=$_SESSION[$bucket][$token]??null;unset($_SESSION[$bucket][$token]);
+    if(!$task||$task[1]<time()||strval($task[0])!==val($_POST,'answer',5,false)) fail('Проверочный ответ неверен или задание истекло. Решите новый пример.','answer');
+}
