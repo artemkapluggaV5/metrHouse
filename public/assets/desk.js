@@ -24,7 +24,8 @@ async function editor(id,epoch){
  bindForm(form,async data=>{if(id){data.set('id',id);data.set('version',o.version)}await api('save',{},data);deskTab='objects';notify('Карточка направлена на проверку.');go('#desk')});
 }
 async function desk(epoch){
- const d=await api('dashboard');if(epoch!==routeVersion)return;
+ const filters=Object.fromEntries(new URLSearchParams(location.hash.split('?')[1]||''));
+ const d=await api('dashboard',{...filters,tab:deskTab||'users'});if(epoch!==routeVersion)return;
  const r=session.user.role,s=Object.fromEntries(d.statuses.map(x=>[x.id,x.name]));
  const titles={agent:{objects:'Мои объекты',requests:'Заявки'},client:{requests:'Мои заявки'},moderator:{objects:'Очередь проверки'},admin:{users:'Пользователи',transfer:'Передача объектов',settings:'Настройки',statuses:'Статусы'}}[r];
  if(!Object.hasOwn(titles,deskTab))deskTab=Object.keys(titles)[0];
@@ -37,14 +38,21 @@ async function desk(epoch){
  list.innerHTML=d.requests.map(q=>`<article class="item"><div><span class="tag">${esc(s[q.status_id])}</span><h3>${esc(q.title)}</h3><p class="muted">${esc(q.created_at)}</p>${r==='agent'?`<p>${esc(q.full_name)} · ${esc(q.phone)}</p>`:''}${q.comment?`<p class="flow">${esc(q.comment)}</p>`:''}</div>${r==='agent'?`<div class="actions">${(+q.status_id===5?[[6,'Взять в работу']]:+q.status_id===6?[[7,'Завершить'],[8,'Закрыть']]:[]).map(([to,n])=>`<button class="btn" data-req="${q.id}" data-to="${to}">${n}</button>`).join('')}</div>`:''}</article>`).join('')||empty('Заявок пока нет',r==='client'?'<p class="muted">Откройте интересующий объект и оставьте заявку на просмотр.</p><a class="btn" href="#catalog">Открыть каталог</a>':'');
  list.querySelectorAll('[data-req]').forEach(b=>b.onclick=async()=>{try{b.disabled=true;await api('request_status',{},{id:b.dataset.req,status:b.dataset.to});notify('Статус заявки обновлён.');go('#desk')}catch(e){notify(e.message);b.disabled=false}});
  }else if(deskTab==='users'){
- list.innerHTML=d.admin.users.map(u=>`<div class="item"><div><h3>${esc(u.full_name)}</h3><p class="muted">${esc(u.email)}</p><span class="tag">${roles[u.role]} · ${+u.is_active?'Активен':'Заблокирован'}</span></div><button class="btn" data-uid="${u.id}">Изменить доступ</button></div>`).join('');
+ const filterBar=`<form class="panel" id="user-filter"><div class="form-grid">${input('q','Имя или электронная почта',filters.q||'','maxlength="255" placeholder="Например, Анна или anna@example.ru"')}${sel('role','Роль',{'':'Все роли',...roles},filters.role||'')}${sel('active','Состояние',{'':'Все состояния',1:'Активен',0:'Заблокирован'},filters.active??'')}<div class="actions">${button('Найти')}<button class="btn" type="button" data-reset>Сбросить</button></div></div></form>`;
+ const pager=d.admin.pages>1?`<div class="actions"><button class="btn" data-step="-1" ${d.admin.page===1?'disabled':''}>Назад</button><span>Страница ${d.admin.page} из ${d.admin.pages}</span><button class="btn" data-step="1" ${d.admin.page===d.admin.pages?'disabled':''}>Далее</button></div>`:'';
+ list.innerHTML=filterBar+'<span class="muted">Найдено пользователей: '+d.admin.total+'</span>'+(d.admin.users.map(u=>`<div class="item"><div><h3>${esc(u.full_name)}</h3><p class="muted">${esc(u.email)}</p><span class="tag">${roles[u.role]} · ${+u.is_active?'Активен':'Заблокирован'}</span></div><button class="btn" data-uid="${u.id}">Изменить доступ</button></div>`).join('')||empty('Пользователи не найдены'))+pager;
+ const f=$('#user-filter');
+ function show(values){const qs=new URLSearchParams(Object.entries(values).filter(([,v])=>v!=='')).toString();go('#desk'+(qs?'?'+qs:''))}
+ f.onsubmit=e=>{e.preventDefault();show(Object.fromEntries(new FormData(f)))};
+ $('[data-reset]',f).onclick=()=>show({});
+ list.querySelectorAll('[data-step]').forEach(b=>b.onclick=()=>show({...filters,page:d.admin.page+Number(b.dataset.step)}));
  list.querySelectorAll('[data-uid]').forEach(b=>b.onclick=()=>{const u=d.admin.users.find(x=>x.id==b.dataset.uid);editAdmin('Доступ пользователя','user',u.id,`<p>${esc(u.full_name)}<br>${esc(u.email)}</p>`+sel('role','Роль',roles,u.role)+sel('active','Состояние',{'1':'Активен','0':'Заблокирован'},u.is_active))});
  }else if(deskTab==='settings'){
  list.innerHTML=`<form class="panel stack">${input('page_size','Объектов на странице каталога',d.admin.page_size,'type="number" min="1" max="48" required')}${formError}<div>${button('Сохранить')}</div></form>`;
  bindForm($('form',list),async data=>{await api('setting',{},data);notify('Настройки сохранены.')});
  }else if(deskTab==='transfer'){
- const agents=d.admin.users.filter(u=>u.role==='agent'&&+u.is_active);
- list.innerHTML=d.objects.map(o=>`<div class="item"><div><h3>${esc(o.title)}</h3><p class="muted">${esc(d.admin.users.find(u=>u.id==o.agent_id)?.full_name)}</p></div><button class="btn" data-transfer="${o.id}">Передать объект</button></div>`).join('')||empty('Объектов пока нет');
+ const agents=d.admin.agents;
+ list.innerHTML=d.objects.map(o=>`<div class="item"><div><h3>${esc(o.title)}</h3><p class="muted">${esc(o.agent_name)}</p></div><button class="btn" data-transfer="${o.id}">Передать объект</button></div>`).join('')||empty('Объектов пока нет');
  list.querySelectorAll('[data-transfer]').forEach(b=>b.onclick=()=>{const o=d.objects.find(x=>x.id==b.dataset.transfer);const dest=agents.filter(u=>u.id!=o.agent_id);
  if(!dest.length){dialog('Передача объекта','<p>Сначала назначьте другого действующего агента в разделе «Пользователи».</p>');return}
  editAdmin('Передача объекта','transfer',o.id,`<p>${esc(o.title)}</p>`+sel('agent_id','Новый ответственный агент',Object.fromEntries(dest.map(u=>[u.id,u.full_name])),dest[0].id));});
@@ -53,4 +61,4 @@ async function desk(epoch){
  list.querySelectorAll('[data-sid]').forEach(b=>b.onclick=()=>{const x=d.statuses.find(y=>y.id==b.dataset.sid);editAdmin('Название и порядок','status',x.id,input('name','Название',x.name,'required maxlength="80"')+input('sort_order','Порядок',x.sort_order,'type="number" min="0" max="65535" required'))});
  }
 }
-function editAdmin(title,op,id,fields){dialog(title,`<form class="stack">${fields}${formError}${button('Сохранить')}</form>`);bindForm($('form',modal),async data=>{data.set('id',id);await api(op,{},data);modal.close();notify('Изменения сохранены.');go('#desk')});}
+function editAdmin(title,op,id,fields){dialog(title,`<form class="stack">${fields}${formError}${button('Сохранить')}</form>`);bindForm($('form',modal),async data=>{data.set('id',id);await api(op,{},data);modal.close();notify('Изменения сохранены.');go(location.hash)});}
