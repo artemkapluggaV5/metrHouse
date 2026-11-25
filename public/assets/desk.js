@@ -58,7 +58,36 @@ async function desk(epoch){
  editAdmin('Передача объекта','transfer',o.id,`<p>${esc(o.title)}</p>`+sel('agent_id','Новый ответственный агент',Object.fromEntries(dest.map(u=>[u.id,u.full_name])),dest[0].id));});
  }else{
  list.innerHTML=d.statuses.map(x=>`<div class="item"><div><h3>${esc(x.name)}</h3><p class="muted">${x.entity_type==='object'?'Объект':'Заявка'} · ${esc(x.code)} · Порядок ${x.sort_order}</p></div><button class="btn" data-sid="${x.id}">Изменить</button></div>`).join('');
- list.querySelectorAll('[data-sid]').forEach(b=>b.onclick=()=>{const x=d.statuses.find(y=>y.id==b.dataset.sid);editAdmin('Название и порядок','status',x.id,input('name','Название',x.name,'required maxlength="80"')+input('sort_order','Порядок',x.sort_order,'type="number" min="0" max="65535" required'))});
+ list.querySelectorAll('[data-sid]').forEach(b=>b.onclick=()=>editStatus(d.statuses.find(x=>x.id==b.dataset.sid)));
  }
+}
+function editStatus(status){
+ const labels={
+   pending:['На проверке','Ожидает проверки'],published:['Опубликован','В каталоге'],
+   rejected:['Отклонён','Публикация отклонена'],archived:['В архиве','Архивный'],
+   new:['Новая','Получена'],working:['В работе','В обработке'],
+   done:['Завершена','Выполнена'],closed:['Закрыта','Обращение закрыто']
+ };
+ const choices=new Set([status.name,...(labels[status.code]||[])]);
+ const options=Object.fromEntries(Array.from(choices,label=>[label,label]));
+ options['']='Своё название…';
+ dialog('Название и порядок',`<form class="stack">
+   ${sel('preset','Название статуса',options,status.name)}
+   ${input('name','Своё название','','required maxlength="80"')}
+   ${input('sort_order','Порядок в списке',status.sort_order,'type="number" min="0" max="65535" required')}
+   <small class="muted">Чем меньше число, тем выше статус в своей группе. Например, 15 ставит его между 10 и 20.</small>
+   ${formError}${button('Сохранить')}</form>`);
+ const form=$('form',modal),preset=form.elements.preset,custom=form.elements.name;
+ const toggle=()=>{
+   custom.disabled=preset.value!=='';
+   custom.closest('label').hidden=custom.disabled;
+   if(!custom.disabled)custom.focus();
+ };
+ preset.onchange=toggle;toggle();
+ bindForm(form,async data=>{
+   if(preset.value)data.set('name',preset.value);
+   data.delete('preset');data.set('id',status.id);
+   await api('status',{},data);modal.close();notify('Статус сохранён.');go(location.hash);
+ });
 }
 function editAdmin(title,op,id,fields){dialog(title,`<form class="stack">${fields}${formError}${button('Сохранить')}</form>`);bindForm($('form',modal),async data=>{data.set('id',id);await api(op,{},data);modal.close();notify('Изменения сохранены.');go(location.hash)});}
