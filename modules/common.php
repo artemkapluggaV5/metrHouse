@@ -155,8 +155,9 @@ function issueChallenge(string $bucket): array
         null,
         true,
     );
-    $_SESSION[$bucket][$token] = [$a + $b, time() + 300];
-    return ['token' => $token, 'question' => "$a + $b"];
+    $lifetime = 300;
+    $_SESSION[$bucket][$token] = [$a + $b, time() + $lifetime];
+    return ['token' => $token, 'question' => "$a + $b", 'expires_in' => $lifetime];
 }
 
 function verifyChallenge(string $bucket): void

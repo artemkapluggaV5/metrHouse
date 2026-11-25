@@ -321,7 +321,7 @@ function auth(register = false, next = '#desk', favoriteId = null) {
                 }
                 ${
                     register
-                        ? '<div class="verify">Проверка · <b data-question>Загрузка…</b> <button type="button" class="linkbtn" data-refresh>Новый пример</button></div>' +
+                        ? '<div class="verify">Проверка · <b data-question aria-live="polite">Загрузка…</b></div>' +
                           input(
                               'answer',
                               'Ответ на пример',
@@ -339,31 +339,37 @@ function auth(register = false, next = '#desk', favoriteId = null) {
     $('#switch').onclick = () => auth(!register, next, favoriteId);
     const form = $('#authform');
     let token = '';
+    let refreshTimer;
     async function refresh() {
-        const question = $('[data-question]', form),
-            refreshButton = $('[data-refresh]', form);
+        if (!form.isConnected || !modal.open) {
+            return;
+        }
+        const question = $('[data-question]', form);
+        const answer = form.elements.answer;
         token = '';
-        refreshButton.disabled = true;
-        form.elements.answer.value = '';
+        answer.value = '';
+        answer.disabled = true;
+        question.textContent = 'Загрузка…';
         try {
             const task = await api('registration_challenge');
             token = task.token;
             question.textContent = task.question + ' = ?';
-        } catch (e) {
-            question.textContent = 'Нажмите «Новый пример» для повторной загрузки.';
-        } finally {
-            refreshButton.disabled = false;
+            answer.disabled = false;
+            refreshTimer = setTimeout(refresh, task.expires_in * 1000);
+        } catch {
+            question.textContent = 'Не удалось загрузить пример. Пробуем ещё раз…';
+            refreshTimer = setTimeout(refresh, 5000);
         }
     }
     if (register) {
-        $('[data-refresh]', form).onclick = refresh;
         refresh();
     }
     bindForm(form, async (data) => {
         if (register) {
             if (!token) {
-                throw new Error('Дождитесь загрузки примера или нажмите «Новый пример».');
+                throw new Error('Дождитесь загрузки примера.');
             }
+            clearTimeout(refreshTimer);
             data.set('token', token);
         }
         try {
