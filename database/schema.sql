@@ -50,6 +50,14 @@ CREATE TABLE objects (
     INDEX (status_id, property_type, price)
 ) ENGINE = InnoDB;
 
+CREATE TABLE favorites (
+    user_id INT NOT NULL,
+    object_id INT NOT NULL,
+    PRIMARY KEY (user_id, object_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (object_id) REFERENCES objects(id) ON DELETE CASCADE
+) ENGINE = InnoDB;
+
 CREATE TABLE object_photos (
     id INT AUTO_INCREMENT PRIMARY KEY,
     object_id INT NOT NULL,

@@ -18,12 +18,12 @@ $admin = new PDO(
     $c['root'],
     [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION],
 );
-$tableCount = (int) $admin
-    ->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='metr'")
-    ->fetchColumn();
-if ($tableCount === 0) {
+$tables = $admin->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN);
+if (!$tables) {
     $admin->exec(file_get_contents($root . '/database/schema.sql'));
-} elseif ($tableCount !== 6) {
+} elseif (array_diff(['users', 'statuses', 'objects', 'object_photos', 'requests', 'settings'], $tables)) {
     throw new RuntimeException('Incomplete schema. Restore a backup before continuing.');
+} elseif (!in_array('favorites', $tables, true)) {
+    $admin->exec(file_get_contents($root . '/database/migrations/001_favorites.sql'));
 }
 require __DIR__ . '/seed.php';

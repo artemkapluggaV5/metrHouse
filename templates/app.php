@@ -17,6 +17,7 @@
                 <a href="#catalog" class="brand" aria-label="Метр, каталог"><img src="assets/mark.svg" alt="">метр<span>.</span></a>
                 <nav>
                     <a id="catalog-link" href="#catalog">Каталог</a>
+                    <a id="favorites-link" href="#favorites">Избранное</a>
                     <a id="desk-link" href="#desk" hidden>Кабинет</a>
                 </nav>
                 <div id="account"></div>

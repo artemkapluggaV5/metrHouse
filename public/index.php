@@ -58,6 +58,7 @@ try {
     $result = match ($op) {
         'session' => ['user' => user(), 'csrf' => $_SESSION['csrf']],
         'catalog' => catalog(),
+        'favorite' => setFavorite(),
         'detail' => detail(),
         'photo' => photo(),
         'login' => authenticate(false),

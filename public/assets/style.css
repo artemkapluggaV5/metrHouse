@@ -361,7 +361,25 @@ h2 {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 21px;
 }
+.card-entry {
+    position: relative;
+    min-width: 0;
+}
+.card-entry > .favorite-toggle {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    border-radius: 50%;
+    box-shadow: 0 2px 8px #26314a20;
+}
+.favorite-toggle[aria-pressed='true'] {
+    color: #b73553;
+}
+.favorite-toggle[aria-pressed='true'] .ic {
+    fill: currentColor;
+}
 .card {
+    height: 100%;
     display: block;
     background: #fff;
     border: 1px solid #dedfda;
@@ -838,6 +856,18 @@ dialog .stack {
     }
     .top nav a#desk-link {
         display: none;
+    }
+}
+
+@media (max-width: 380px) {
+    .top {
+        gap: 6px;
+    }
+    .brand img {
+        margin-right: 4px;
+    }
+    #account {
+        gap: 4px;
     }
 }
 

@@ -11,6 +11,7 @@ const types = { flat: 'Квартира', house: 'Дом', office: 'Коммер
 const deals = { sale: 'Продажа', rent: 'Аренда' };
 const roles = { client: 'Клиент', agent: 'Агент', moderator: 'Модератор', admin: 'Администратор' };
 const shapes = {
+    heart: '<path d="M20.6 4.9a5.3 5.3 0 0 0-7.5 0L12 6l-1.1-1.1a5.3 5.3 0 0 0-7.5 7.5L12 21l8.6-8.6a5.3 5.3 0 0 0 0-7.5Z"/>',
     pin: '<path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1114 0Z"/><circle cx="12" cy="10" r="2.4"/>',
     search: '<circle cx="10" cy="10" r="6.5"/><path d="m15 15 5 5"/>',
     user: '<circle cx="12" cy="8" r="3.5"/><path d="M5 21v-2a7 7 0 0114 0v2"/>',
@@ -281,7 +282,7 @@ function account() {
     }
 }
 
-function auth(register = false, next = '#desk') {
+function auth(register = false, next = '#desk', favoriteId = null) {
     authNext = next;
     dialog(
         register ? 'Регистрация клиента' : 'Вход в кабинет',
@@ -335,7 +336,7 @@ function auth(register = false, next = '#desk') {
             </form>
         `,
     );
-    $('#switch').onclick = () => auth(!register, next);
+    $('#switch').onclick = () => auth(!register, next, favoriteId);
     const form = $('#authform');
     let token = '';
     async function refresh() {
@@ -376,6 +377,14 @@ function auth(register = false, next = '#desk') {
         account();
         modal.close();
         deskTab = '';
+        if (favoriteId !== null) {
+            try {
+                await api('favorite', {}, { id: favoriteId, saved: 1 });
+                notify('Объект добавлен в избранное.');
+            } catch (e) {
+                notify(e.message);
+            }
+        }
         go(next);
     });
 }
@@ -388,7 +397,59 @@ function go(hash) {
     }
 }
 const empty = (title, sub = '') => `<div class="empty"><h3>${esc(title)}</h3>${sub}</div>`;
+function favoriteButton(o, compact = false) {
+    const saved = Boolean(Number(o.is_favorite));
+    const label = favoriteLabel(saved);
+    return `
+        <button type="button" class="favorite-toggle ${compact ? 'iconbtn' : 'btn'}"
+                data-favorite="${o.id}" aria-pressed="${saved}"
+                title="${label}" ${compact ? `aria-label="Избранное · ${esc(o.title)}"` : ''}>
+            ${ic('heart')}${compact ? '' : `<span>${label}</span>`}
+        </button>
+    `;
+}
+
+function favoriteLabel(saved) {
+    return saved ? 'Убрать из избранного' : 'Добавить в избранное';
+}
+
+main.addEventListener('click', async (event) => {
+    const toggle = event.target.closest('[data-favorite]');
+    if (!toggle || toggle.disabled) {
+        return;
+    }
+    const id = toggle.dataset.favorite;
+    if (!session.user) {
+        auth(false, location.hash || '#catalog', id);
+        return;
+    }
+    const saved = toggle.getAttribute('aria-pressed') === 'false';
+    toggle.disabled = true;
+    try {
+        await api('favorite', {}, { id, saved: saved ? 1 : 0 });
+        notify(saved ? 'Объект добавлен в избранное.' : 'Объект убран из избранного.');
+        if (main.dataset.route === 'favorites') {
+            await route();
+        } else if (toggle.isConnected) {
+            toggle.setAttribute('aria-pressed', String(saved));
+            toggle.title = favoriteLabel(saved);
+            const label = toggle.querySelector('span');
+            if (label) {
+                label.textContent = toggle.title;
+            }
+        }
+    } catch (e) {
+        notify(e.message);
+    } finally {
+        toggle.disabled = false;
+    }
+});
+
 function card(o) {
+    return `<div class="card-entry">${cardLink(o)}${favoriteButton(o, true)}</div>`;
+}
+
+function cardLink(o) {
     return `
         <a class="card" href="#object/${o.id}">
             <div class="visual">
@@ -420,19 +481,28 @@ function card(o) {
     `;
 }
 
-async function catalog(p, epoch) {
+async function catalog(p, epoch, favoritesOnly) {
     lastCatalog = location.hash || '#catalog';
+    const listPath = favoritesOnly ? '#favorites' : '#catalog';
+    if (favoritesOnly && !session.user) {
+        main.innerHTML = empty(
+            'Избранное',
+            '<p>Войдите, чтобы открыть сохранённые объекты.</p><button class="btn primary" id="enter">Войти</button>',
+        );
+        $('#enter').onclick = () => auth(false, lastCatalog);
+        return;
+    }
     const params = Object.fromEntries(p),
         deal = params.deal_type || '';
-    if (!$('#filter')) {
+    if ($('#filter')?.dataset.list !== listPath) {
         main.innerHTML = `
-            <section class="hero">
+            ${favoritesOnly ? '<h1 class="page-title section">Избранное</h1>' : `<section class="hero">
                 <div class="hero-copy">
                     <span class="location">${ic('pin')} Москва и область</span>
                     <h1>Каталог<br><em>недвижимости</em></h1>
                 </div>
-            </section>
-            <form class="filter-panel" id="filter">
+            </section>`}
+            <form class="filter-panel" id="filter" data-list="${listPath}">
                 <div class="tabs" aria-label="Вид сделки">
                     ${
                         Object.entries({
@@ -472,7 +542,7 @@ async function catalog(p, epoch) {
             </form>
             <section aria-label="Результаты поиска">
                 <div class="heading">
-                    <h2>Предложения<span class="count" id="total">…</span></h2>
+                    <h2>${favoritesOnly ? 'Сохранённые объекты' : 'Предложения'}<span class="count" id="total">…</span></h2>
                     <label class="sortwrap">
                         ${ic('sort')}
                         <select class="sort" aria-label="Сортировка">${
@@ -520,7 +590,7 @@ async function catalog(p, epoch) {
         const q = new URLSearchParams(
             Object.entries(d).filter(([k, v]) => v && !(k === 'sort' && v === 'new')),
         ).toString();
-        go('#catalog' + (q ? '?' + q : ''));
+        go(listPath + (q ? '?' + q : ''));
     };
     f.onsubmit = (e) => {
         e.preventDefault();
@@ -532,7 +602,7 @@ async function catalog(p, epoch) {
     $('.sort').onchange = () => search();
     let list;
     try {
-        list = await api('catalog', params);
+        list = await api('catalog', { ...params, favorites: favoritesOnly ? '1' : '0' });
     } catch (e) {
         if (epoch !== routeVersion) {
             return;
@@ -546,12 +616,21 @@ async function catalog(p, epoch) {
         return;
     }
     $('#total').textContent = list.total;
-    $('#results').innerHTML = list.total
-        ? `<div class="cards">${list.rows.map(card).join('')}</div>`
-        : empty(
-              'Объектов по этим условиям нет',
-              '<p class="muted">Измените диапазон цен или тип недвижимости.</p><a class="btn" href="#catalog">Сбросить фильтры</a>',
-          );
+    const results = $('#results');
+    const filtered = ['q', 'deal_type', 'property_type', 'min', 'max'].some((key) => params[key]);
+    if (list.total) {
+        results.innerHTML = `<div class="cards">${list.rows.map(card).join('')}</div>`;
+    } else if (favoritesOnly && !filtered) {
+        results.innerHTML = empty(
+            'В избранном пока пусто',
+            '<p>Нажмите сердечко на понравившемся объекте.</p><a class="btn" href="#catalog">Перейти в каталог</a>',
+        );
+    } else {
+        results.innerHTML = empty(
+            'Объектов по этим условиям нет',
+            `<p class="muted">Измените диапазон цен или тип недвижимости.</p><a class="btn" href="${listPath}">Сбросить фильтры</a>`,
+        );
+    }
     if (list.pages > 1) {
         const indices = [...new Set([1, list.page - 1, list.page, list.page + 1, list.pages])]
             .filter((i) => i >= 1 && i <= list.pages)
@@ -632,8 +711,12 @@ async function detail(id, epoch) {
         staff =
             (u?.role === 'agent' && u.id == o.agent_id) ||
             (u?.role === 'moderator' && o.status_id == 1);
+    const backToDesk = staff && !main.dataset.fromFavorites;
+    const backLabel = backToDesk ? 'В кабинет' : main.dataset.fromFavorites ? 'В избранное' : 'К результатам поиска';
     main.innerHTML = `
-        <a class="back" href="${esc(staff ? '#desk' : lastCatalog)}">${ic('left')}${staff ? 'В кабинет' : 'К результатам поиска'}</a>
+        <a class="back" href="${esc(backToDesk ? '#desk' : lastCatalog)}">
+            ${ic('left')}${backLabel}
+        </a>
         <span class="tag">${types[o.property_type]} · ${deals[o.deal_type]}</span>
         <h1 class="page-title">${esc(o.title)}</h1>
         <div class="address">
@@ -711,6 +794,9 @@ async function detail(id, epoch) {
         $('#publish').onclick = () => decision(o, true);
         $('#reject').onclick = () => decision(o, false);
     }
+    if (o.status_id == 2) {
+        box.insertAdjacentHTML('beforeend', favoriteButton(o));
+    }
 }
 
 async function route() {
@@ -720,15 +806,21 @@ async function route() {
     }
     const [path, query = ''] = (location.hash.slice(1) || 'catalog').split('?');
     const [name, id] = path.split('/');
-    $('#catalog-link').classList.toggle('active', name === 'catalog' || name === 'object');
-    $('#desk-link').classList.toggle('active', name === 'desk' || name === 'edit');
     if (main.dataset.route !== path) {
+        if (name === 'object' && main.dataset.route === 'favorites') {
+            main.dataset.fromFavorites = '1';
+        } else {
+            delete main.dataset.fromFavorites;
+        }
         main.dataset.route = path;
         window.scrollTo({ top: 0, behavior: 'instant' });
     }
+    $('#catalog-link').classList.toggle('active', name === 'catalog' || (name === 'object' && !main.dataset.fromFavorites));
+    $('#desk-link').classList.toggle('active', name === 'desk' || name === 'edit');
+    $('#favorites-link').classList.toggle('active', name === 'favorites' || !!main.dataset.fromFavorites);
     try {
-        if (name === 'catalog') {
-            await catalog(new URLSearchParams(query), epoch);
+        if (name === 'catalog' || name === 'favorites') {
+            await catalog(new URLSearchParams(query), epoch, name === 'favorites');
         } else if (name === 'object') {
             await detail(id, epoch);
         } else if (name === 'desk' || name === 'edit') {
