@@ -18,7 +18,7 @@ function adminUserPage(): array
         $where[] = 'is_active=?';
         $args[] = integer($_GET, 'active', 0, 1);
     }
-    $result = deskPage('id, full_name, email, role, is_active, created_at', 'users', $where, $args, 'id');
+    $result = deskPage('id, full_name, email, role, is_active, last_login_at', 'users', $where, $args, 'id');
     $result['users'] = $result['rows'];
     unset($result['rows']);
     return $result;

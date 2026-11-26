@@ -30,4 +30,7 @@ $clientColumn = $admin->query("SHOW COLUMNS FROM requests LIKE 'client_id'")->fe
 if ($clientColumn['Null'] === 'NO') {
     $admin->exec(file_get_contents($root . '/database/migrations/002_request_client.sql'));
 }
+if (!$admin->query("SHOW COLUMNS FROM users LIKE 'last_login_at'")->fetch()) {
+    $admin->exec(file_get_contents($root . '/database/migrations/003_last_login.sql'));
+}
 require __DIR__ . '/seed.php';

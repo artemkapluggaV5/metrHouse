@@ -1,4 +1,18 @@
 'use strict';
+const loginDateFormat = new Intl.DateTimeFormat('ru-RU', {
+    timeZone: 'Europe/Moscow',
+    dateStyle: 'short',
+    timeStyle: 'medium',
+});
+
+function lastLoginText(timestamp) {
+    if (!timestamp) {
+        return 'Нет данных';
+    }
+    const utc = new Date(timestamp.replace(' ', 'T') + 'Z');
+    return loginDateFormat.format(utc) + ' МСК';
+}
+
 function decision(o, publish) {
     dialog(
         publish ? 'Опубликовать объект?' : 'Отклонить объявление',
@@ -355,7 +369,7 @@ async function desk(epoch) {
                                 <div>
                                     <h3>${esc(u.full_name)}</h3>
                                     <p class="muted">${esc(u.email)}</p>
-                                    <p class="muted">Дата регистрации · ${esc(u.created_at.slice(0, 10).split('-').reverse().join('.'))}</p>
+                                    <p class="muted">Последний вход · ${lastLoginText(u.last_login_at)}</p>
                                     <span class="tag">${roles[u.role]} · ${+u.is_active ? 'Активен' : 'Заблокирован'}</span>
                                 </div>
                                 <div class="actions">

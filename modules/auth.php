@@ -22,11 +22,11 @@ function authenticate(bool $register): array
         $name = preg_replace('/ +/u', ' ', $name);
         verifyChallenge('registration_tasks');
         try {
-            query('INSERT INTO users(full_name,email,password_hash) VALUES(?,?,?)', [
-                $name,
-                $email,
-                password_hash($pass, PASSWORD_DEFAULT),
-            ]);
+            query(
+                'INSERT INTO users (full_name, email, password_hash, last_login_at)
+                 VALUES (?, ?, ?, UTC_TIMESTAMP())',
+                [$name, $email, password_hash($pass, PASSWORD_DEFAULT)],
+            );
         } catch (PDOException $e) {
             if (($e->errorInfo[1] ?? 0) == 1062) {
                 fail('Этот адрес уже зарегистрирован.', 'email');
@@ -40,6 +40,7 @@ function authenticate(bool $register): array
             fail('Проверьте почту и пароль или обратитесь к администратору.', 'email', 401);
         }
         $id = $u['id'];
+        query('UPDATE users SET last_login_at = UTC_TIMESTAMP() WHERE id = ? AND is_active = 1', [$id]);
     }
     $_SESSION = [];
     session_regenerate_id(true);

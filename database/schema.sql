@@ -5,7 +5,8 @@ CREATE TABLE users (
     password_hash VARCHAR(255) NOT NULL,
     role ENUM('client', 'agent', 'moderator', 'admin') NOT NULL DEFAULT 'client',
     is_active BOOLEAN NOT NULL DEFAULT 1,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_login_at DATETIME NULL
 ) ENGINE = InnoDB;
 
 CREATE TABLE statuses (
