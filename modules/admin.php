@@ -21,6 +21,34 @@ function adminUser(): array
     });
 }
 
+function deleteUser(): array
+{
+    $admin = role('admin');
+    $id = integer($_POST, 'id');
+    if ($id == $admin['id']) {
+        fail('Нельзя удалить собственную учётную запись.');
+    }
+    return tx(function () use ($admin, $id) {
+        $users = query(
+            'SELECT id, role, is_active FROM users WHERE id IN (?, ?) ORDER BY id FOR UPDATE',
+            [$admin['id'], $id],
+        )->fetchAll(PDO::FETCH_UNIQUE | PDO::FETCH_ASSOC);
+        $actor = $users[$admin['id']] ?? null;
+        if (!$actor || !$actor['is_active'] || $actor['role'] !== 'admin') {
+            fail('Недостаточно прав.', '', 403);
+        }
+        if (!isset($users[$id])) {
+            fail('Пользователь уже удалён.', '', 404);
+        }
+        if (one('SELECT id FROM objects WHERE agent_id = ? LIMIT 1', [$id])) {
+            fail('Сначала передайте объекты агента во вкладке «Передача объектов».', '', 409);
+        }
+        query('UPDATE requests SET client_id = NULL WHERE client_id = ?', [$id]);
+        query('DELETE FROM users WHERE id = ?', [$id]);
+        return [];
+    });
+}
+
 function transfer(): array
 {
     role('admin');

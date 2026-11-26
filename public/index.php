@@ -79,6 +79,7 @@ try {
         'apply' => applyForObject(),
         'request_status' => moveRequest(),
         'user' => adminUser(),
+        'delete_user' => deleteUser(),
         'transfer' => transfer(),
         'setting' => adminSetting(),
         'status' => adminStatus(),

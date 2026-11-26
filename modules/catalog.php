@@ -106,6 +106,9 @@ function setFavorite(): array
     $saved = integer($_POST, 'saved', 0, 1);
     if ($saved) {
         tx(function () use ($u, $id) {
+            if (!one('SELECT id FROM users WHERE id = ? AND is_active = 1 FOR UPDATE', [$u['id']])) {
+                fail('Учётная запись недоступна.', '', 403);
+            }
             $object = prop($id, true);
             if ($object['status_id'] != 2) {
                 fail('Объект больше не опубликован.', '', 404);

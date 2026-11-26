@@ -62,7 +62,11 @@ function incomingPhotos(array &$created): array
 
 function saveObject(): array
 {
-    $u = role('agent');
+    $u = user();
+    $id = empty($_POST['id']) ? null : integer($_POST, 'id');
+    if (!$u || ($u['role'] !== 'agent' && !($u['role'] === 'moderator' && $id))) {
+        fail('Недостаточно прав для сохранения объекта.', '', 403);
+    }
     $title = val($_POST, 'title', 255);
     $type = choice($_POST, 'property_type', ['flat', 'house', 'office']);
     $deal = choice($_POST, 'deal_type', ['sale', 'rent']);
@@ -74,7 +78,6 @@ function saveObject(): array
             : null;
     $address = val($_POST, 'address', 255);
     $desc = val($_POST, 'description', 10000);
-    $id = empty($_POST['id']) ? null : integer($_POST, 'id');
     $fields = [$title, $type, $deal, $price, $area, $rooms, $address, $desc];
     $created = [];
     $removed = [];
@@ -82,18 +85,22 @@ function saveObject(): array
         $id = tx(function () use ($u, $fields, $id, &$created, &$removed) {
             if (
                 !one(
-                    "SELECT id
+                    'SELECT id
                      FROM users
-                     WHERE id = ? AND role = 'agent' AND is_active = 1
-                     FOR UPDATE",
-                    [$u['id']],
+                     WHERE id = ? AND role = ? AND is_active = 1
+                     FOR UPDATE',
+                    [$u['id'], $u['role']],
                 )
             ) {
-                fail('Доступ агента изменился.', '', 403);
+                fail('Права пользователя изменились.', '', 403);
             }
             if ($id) {
                 $o = prop($id, true);
-                owner($o, $u);
+                if ($u['role'] === 'agent') {
+                    owner($o, $u);
+                } elseif ($o['status_id'] != 1) {
+                    fail('Модератор может изменить только объект на проверке.', '', 409);
+                }
                 version($o);
                 query(
                     'UPDATE objects

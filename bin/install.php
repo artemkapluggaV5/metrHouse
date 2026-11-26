@@ -26,4 +26,8 @@ if (!$tables) {
 } elseif (!in_array('favorites', $tables, true)) {
     $admin->exec(file_get_contents($root . '/database/migrations/001_favorites.sql'));
 }
+$clientColumn = $admin->query("SHOW COLUMNS FROM requests LIKE 'client_id'")->fetch(PDO::FETCH_ASSOC);
+if ($clientColumn['Null'] === 'NO') {
+    $admin->exec(file_get_contents($root . '/database/migrations/002_request_client.sql'));
+}
 require __DIR__ . '/seed.php';

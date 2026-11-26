@@ -793,10 +793,12 @@ async function detail(id, epoch) {
         box.innerHTML = `<a class="btn primary" href="#edit/${id}">Редактировать</a>`;
     }
     if (staff && u.role === 'moderator') {
-        box.innerHTML =
-            '<p class="muted">На проверке · версия ' +
-            o.version +
-            '</p><button class="btn primary" id="publish">Опубликовать</button><button class="btn" id="reject">Отклонить</button>';
+        box.innerHTML = `
+            <p class="muted">На проверке · версия ${o.version}</p>
+            <button class="btn primary" id="publish">Опубликовать</button>
+            <a class="btn" href="#edit/${o.id}">Редактировать</a>
+            <button class="btn" id="reject">Отклонить</button>
+        `;
         $('#publish').onclick = () => decision(o, true);
         $('#reject').onclick = () => decision(o, false);
     }

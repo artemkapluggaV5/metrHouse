@@ -51,8 +51,9 @@ function retire(o, del) {
 }
 
 async function editor(id, epoch) {
-    if (session.user.role !== 'agent') {
-        throw new Error('Редактирование доступно агенту.');
+    const moderator = session.user.role === 'moderator';
+    if (session.user.role !== 'agent' && !(moderator && id)) {
+        throw new Error('Нет доступа к редактору объекта.');
     }
     const o = id
         ? await api('detail', { id })
@@ -60,11 +61,15 @@ async function editor(id, epoch) {
     if (epoch !== routeVersion) {
         return;
     }
-    if (id && session.user.id != o.agent_id) {
+    if (moderator && o.status_id != 1) {
+        throw new Error('Модератор может изменить только объект на проверке.');
+    }
+    if (id && !moderator && session.user.id != o.agent_id) {
         throw new Error('Это объект другого агента.');
     }
+    const back = moderator ? '#object/' + o.id : '#desk';
     main.innerHTML = `
-        <a class="back" href="#desk">${ic('left')} Мои объекты</a>
+        <a class="back" href="${back}">${ic('left')} ${moderator ? 'К проверке объекта' : 'Мои объекты'}</a>
         <h1 class="page-title">${id ? 'Редактирование объекта' : 'Новый объект'}</h1>
         <form id="editor" class="panel section form-grid">
             <div class="wide">
@@ -112,8 +117,8 @@ async function editor(id, epoch) {
             <div class="wide">
                 ${formError}
                 <div class="actions">
-                    ${button('Отправить на проверку')}
-                    <a class="btn" href="#desk">Отмена</a>
+                    ${button(moderator ? 'Сохранить изменения' : 'Отправить на проверку')}
+                    <a class="btn" href="${back}">Отмена</a>
                 </div>
             </div>
         </form>
@@ -132,8 +137,8 @@ async function editor(id, epoch) {
         }
         await api('save', {}, data);
         deskTab = 'objects';
-        notify('Карточка направлена на проверку.');
-        go('#desk');
+        notify(moderator ? 'Изменения сохранены. Объект на проверке.' : 'Карточка направлена на проверку.');
+        go(back);
     });
 }
 
@@ -214,7 +219,11 @@ async function desk(epoch) {
                                     ${o.status_id == 3 ? `<p class="flow">Причина: ${esc(o.moderation_note)}</p>` : ''}
                                 </div>
                                 <div class="actions">
-                                    ${r === 'moderator' ? `<a class="btn primary" href="#object/${o.id}">Проверить карточку</a>` : `
+                                    ${r === 'moderator' ? `
+                                        <a class="btn primary" href="#object/${o.id}">Проверить карточку</a>
+                                        <a class="btn" href="#edit/${o.id}">Редактировать</a>
+                                        <button class="btn" data-reject="${o.id}">Отклонить</button>
+                                    ` : `
                                         <a class="btn" href="#edit/${o.id}">Изменить</a>
                                         ${o.status_id != 4 ? `<button class="btn" data-archive="${o.id}">В архив</button>` : ''}
                                         ${[1, 3].includes(+o.status_id) ? `<button class="btn danger" data-delete="${o.id}">Удалить</button>` : ''}
@@ -225,6 +234,9 @@ async function desk(epoch) {
                 )
                 .join('') ||
             empty(r === 'moderator' ? 'Все карточки проверены' : 'Объектов пока нет');
+        list.querySelectorAll('[data-reject]').forEach((button) => {
+            button.onclick = () => decision(d.objects.find((o) => o.id == button.dataset.reject), false);
+        });
         list.querySelectorAll('[data-archive],[data-delete]').forEach(
             (b) =>
                 (b.onclick = () =>
@@ -343,9 +355,13 @@ async function desk(epoch) {
                                 <div>
                                     <h3>${esc(u.full_name)}</h3>
                                     <p class="muted">${esc(u.email)}</p>
+                                    <p class="muted">Дата регистрации · ${esc(u.created_at.slice(0, 10).split('-').reverse().join('.'))}</p>
                                     <span class="tag">${roles[u.role]} · ${+u.is_active ? 'Активен' : 'Заблокирован'}</span>
                                 </div>
-                                <button class="btn" data-uid="${u.id}">Изменить доступ</button>
+                                <div class="actions">
+                                    <button class="btn" data-uid="${u.id}">Изменить доступ</button>
+                                    ${u.id != session.user.id ? `<button class="btn danger" data-delete-user="${u.id}">Удалить</button>` : ''}
+                                </div>
                             </div>
                         `,
                 )
@@ -358,6 +374,9 @@ async function desk(epoch) {
             show(Object.fromEntries(new FormData(f)));
         };
         $('[data-reset]', f).onclick = () => show({});
+        list.querySelectorAll('[data-delete-user]').forEach((button) => {
+            button.onclick = () => confirmUserDeletion(d.admin.users.find((u) => u.id == button.dataset.deleteUser));
+        });
         list.querySelectorAll('[data-step]').forEach(
             (b) =>
                 (b.onclick = () =>
@@ -660,6 +679,27 @@ function editStatus(status) {
         await api('status', {}, data);
         modal.close();
         notify('Статус сохранён.');
+        go(location.hash);
+    });
+}
+
+function confirmUserDeletion(user) {
+    dialog('Удалить пользователя?', `
+        <form class="stack">
+            <p><strong>${esc(user.full_name)}</strong><br>${esc(user.email)}</p>
+            <p>Учётная запись и избранное будут удалены. Заявки останутся в истории агента.</p>
+            ${formError}
+            <div class="actions">
+                <button class="btn" type="button" data-cancel>Отмена</button>
+                ${button('Удалить пользователя', 'danger')}
+            </div>
+        </form>
+    `);
+    $('[data-cancel]', modal).onclick = () => modal.close();
+    bindForm($('form', modal), async () => {
+        await api('delete_user', {}, { id: user.id });
+        modal.close();
+        notify('Пользователь удалён.');
         go(location.hash);
     });
 }

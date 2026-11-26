@@ -18,7 +18,7 @@ function adminUserPage(): array
         $where[] = 'is_active=?';
         $args[] = integer($_GET, 'active', 0, 1);
     }
-    $result = deskPage('id,full_name,email,role,is_active', 'users', $where, $args, 'id');
+    $result = deskPage('id, full_name, email, role, is_active, created_at', 'users', $where, $args, 'id');
     $result['users'] = $result['rows'];
     unset($result['rows']);
     return $result;
@@ -90,8 +90,8 @@ function dashboard(): array
         }
         if ($isRequest) {
             $pagination = deskPage(
-                'r.*,o.title,u.full_name',
-                'requests r JOIN objects o ON o.id=r.object_id JOIN users u ON u.id=r.client_id',
+                "r.*, o.title, COALESCE(u.full_name, 'Удалённый пользователь') AS full_name",
+                'requests r JOIN objects o ON o.id=r.object_id LEFT JOIN users u ON u.id=r.client_id',
                 $where,
                 $args,
                 'r.id DESC',

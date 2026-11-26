@@ -15,7 +15,9 @@ function applyForObject(): array
     checkContact('phone', $phone);
     verifyChallenge('tasks');
     return tx(function () use ($u, $id, $phone, $comment) {
-        one('SELECT id FROM users WHERE id=? FOR UPDATE', [$u['id']]);
+        if (!one("SELECT id FROM users WHERE id = ? AND role = 'client' AND is_active = 1 FOR UPDATE", [$u['id']])) {
+            fail('Учётная запись недоступна.', '', 403);
+        }
         $o = prop($id, true);
         if ($o['status_id'] != 2) {
             fail('Объявление снято с публикации.');

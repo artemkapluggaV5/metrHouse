@@ -73,7 +73,7 @@ CREATE TABLE object_photos (
 CREATE TABLE requests (
     id INT AUTO_INCREMENT PRIMARY KEY,
     object_id INT NOT NULL,
-    client_id INT NOT NULL,
+    client_id INT NULL,
     status_id INT NOT NULL DEFAULT 5,
     phone VARCHAR(30) NOT NULL,
     comment TEXT,
